@@ -8,6 +8,8 @@
 #include "Display/LGFX_TLoraPager.h"
 #include "Display/LvglPort.h"
 #include "Input/InputBridge.h"
+#include "Model/AckTracker.h"
+#include "Model/ChatStore.h"
 #include "NodeDB.h"
 #include "Screens/StatusBar.h"
 #include "Theme.h"
@@ -193,10 +195,23 @@ void handleInputEvent(const InputEvent &event)
 static void tickCb(lv_timer_t *)
 {
     statusBar.refresh();
+    statusBar.setUnread(chatStore.unreadTotal());
 }
 
 void setup()
 {
+    // Model first, and independently of the display: a pager whose panel failed to come up
+    // should still record and deliver messages.
+    //
+    // Nothing else loads the history in this build. BaseUI does it from Screen::setup() and
+    // InkHUD from InkHUD::begin(), both of which are compiled out here - without this the
+    // device would come back from every reboot with an empty history and no error.
+    messageStore.loadFromFlash();
+
+    if (!ackTracker)
+        ackTracker = new AckTracker();
+    chatStore.begin();
+
     if (!LvglPort::begin()) {
         LOG_ERROR("PagerUI: display bring-up failed; UI disabled");
         return;
