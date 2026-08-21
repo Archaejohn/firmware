@@ -7,18 +7,62 @@
 #include "DebugConfiguration.h"
 #include "Display/LGFX_TLoraPager.h"
 #include "Display/LvglPort.h"
+#include "Input/InputBridge.h"
 #include "NodeDB.h"
 #include "Screens/StatusBar.h"
 #include "Theme.h"
 #include "UiTask.h"
 
 #include <lvgl.h>
+#include <stdio.h>
+#include <string.h>
 
 namespace PagerUI
 {
 
 static StatusBar statusBar;
 static lv_obj_t *homeScreen = nullptr;
+static lv_obj_t *eventLogLabel = nullptr;
+
+// Rolling view of the last few input events. This is bring-up instrumentation for the
+// milestone that has no interactive UI yet: it is how the wheel's direction and the keyboard's
+// Shift/Sym layers get confirmed on real hardware, since neither can be trusted from the
+// driver source alone. Goes away with the conversation list.
+static constexpr size_t kEventLogLines = 6;
+static char eventLog[kEventLogLines][40];
+static size_t eventLogCount = 0;
+
+static const char *eventName(input_broker_event e)
+{
+    switch (e) {
+    case INPUT_BROKER_UP:
+        return "UP";
+    case INPUT_BROKER_DOWN:
+        return "DOWN";
+    case INPUT_BROKER_LEFT:
+        return "LEFT";
+    case INPUT_BROKER_RIGHT:
+        return "RIGHT";
+    case INPUT_BROKER_SELECT:
+        return "SELECT";
+    case INPUT_BROKER_SELECT_LONG:
+        return "SELECT_LONG";
+    case INPUT_BROKER_CANCEL:
+        return "CANCEL";
+    case INPUT_BROKER_BACK:
+        return "BACK";
+    case INPUT_BROKER_USER_PRESS:
+        return "USER_PRESS";
+    case INPUT_BROKER_ALT_PRESS:
+        return "ALT_PRESS";
+    case INPUT_BROKER_ALT_LONG:
+        return "ALT_LONG";
+    case INPUT_BROKER_ANYKEY:
+        return "ANYKEY";
+    default:
+        return "?";
+    }
+}
 
 void preInit()
 {
@@ -96,7 +140,54 @@ static void buildHomeScreen()
     lv_obj_align(sub, LV_ALIGN_LEFT_MID, Theme::kPadding * 2 + Theme::kAvatarSize, 10);
     lv_label_set_text(sub, "PagerUI is up. No conversations yet.");
 
+    eventLogLabel = lv_label_create(homeScreen);
+    lv_obj_set_style_text_font(eventLogLabel, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(eventLogLabel, p.textDim, 0);
+    lv_obj_set_style_text_align(eventLogLabel, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_align(eventLogLabel, LV_ALIGN_BOTTOM_RIGHT, -Theme::kPadding, -Theme::kPadding);
+    lv_label_set_text(eventLogLabel, "press a key");
+
     lv_screen_load(homeScreen);
+}
+
+void handleInputEvent(const InputEvent &event)
+{
+    // Printable characters ride on ANYKEY with the byte in kbchar; anything else is a
+    // navigation event. Rendering both together is the point - it is the only way to see
+    // which physical key produces which of the two.
+    char line[sizeof(eventLog[0])];
+    if (event.inputEvent == INPUT_BROKER_ANYKEY && event.kbchar >= 32 && event.kbchar <= 126)
+        snprintf(line, sizeof(line), "'%c' (0x%x)", (char)event.kbchar, (unsigned)event.kbchar);
+    else if (event.kbchar)
+        snprintf(line, sizeof(line), "%s kb=0x%x", eventName(event.inputEvent), (unsigned)event.kbchar);
+    else
+        snprintf(line, sizeof(line), "%s", eventName(event.inputEvent));
+
+    if (eventLogCount == kEventLogLines) {
+        memmove(eventLog[0], eventLog[1], sizeof(eventLog) - sizeof(eventLog[0]));
+        eventLogCount--;
+    }
+    snprintf(eventLog[eventLogCount++], sizeof(eventLog[0]), "%s", line);
+
+    if (eventLogLabel) {
+        char joined[sizeof(eventLog) + kEventLogLines];
+        size_t at = 0;
+        joined[0] = '\0';
+        for (size_t i = 0; i < eventLogCount && at + 1 < sizeof(joined); ++i) {
+            const int n = snprintf(joined + at, sizeof(joined) - at, "%s%s", i ? "\n" : "", eventLog[i]);
+            if (n < 0)
+                break;
+            // snprintf reports what it *would* have written, so advancing by it unchecked
+            // would walk past the buffer on truncation.
+            at += (size_t)n;
+            if (at >= sizeof(joined)) {
+                at = sizeof(joined) - 1;
+                break;
+            }
+        }
+        lv_label_set_text(eventLogLabel, joined);
+        lv_obj_align(eventLogLabel, LV_ALIGN_BOTTOM_RIGHT, -Theme::kPadding, -Theme::kPadding);
+    }
 }
 
 static void tickCb(lv_timer_t *)
@@ -116,6 +207,10 @@ void setup()
     // must go through a queue instead.
     buildHomeScreen();
     lv_timer_create(tickCb, 1000, nullptr);
+
+    // Subscribe before the task starts, so no keystroke is lost in the gap.
+    if (!inputBridge.begin())
+        LOG_WARN("PagerUI: continuing without input");
 
     if (!UiTask::start())
         return;

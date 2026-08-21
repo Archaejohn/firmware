@@ -5,6 +5,8 @@
 #include "UiTask.h"
 
 #include "DebugConfiguration.h"
+#include "Input/InputBridge.h"
+#include "PagerUI.h"
 #include <Arduino.h>
 #include <lvgl.h>
 
@@ -41,6 +43,12 @@ bool isCurrent()
 static void taskLoop(void *)
 {
     for (;;) {
+        // Drain input before rendering, so a keystroke is reflected in the frame it caused
+        // rather than the one after. This is the boundary where lv_* calls become legal.
+        InputEvent ev;
+        while (inputBridge.poll(ev))
+            handleInputEvent(ev);
+
         uint32_t next = lv_timer_handler();
         if (next < kMinDelayMs)
             next = kMinDelayMs;
