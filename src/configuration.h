@@ -622,6 +622,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define HAS_SCREEN 0
 #endif
 
+// Is the central message history (src/MessageStore.h) compiled in?
+// Any on-device UI that shows text messages needs it, including the ones that set
+// MESHTASTIC_EXCLUDE_SCREEN to replace BaseUI. Must be evaluated after the HAS_SCREEN
+// override above, so it sees the final value.
+#if HAS_SCREEN || defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS) || defined(MESHTASTIC_INCLUDE_PAGERUI)
+#define HAS_MESSAGE_STORE 1
+#else
+#define HAS_MESSAGE_STORE 0
+#endif
+
 #ifndef USE_ETHERNET_DEFAULT
 #define USE_ETHERNET_DEFAULT 0
 #endif

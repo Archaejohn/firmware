@@ -553,7 +553,7 @@ bool AdminModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshta
         if (node != NULL) {
             if (nodeDB->setProtectedFlag(node, NODEINFO_BITFIELD_IS_IGNORED_MASK, true)) {
                 nodeDB->eraseNodeSatellites(node->num);
-#if HAS_SCREEN || defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS)
+#if HAS_MESSAGE_STORE
                 messageStore.deleteAllMessagesFromNode(node->num);
 #endif
                 saveChanges(SEGMENT_NODEDATABASE, false);
@@ -996,6 +996,9 @@ void AdminModule::handleSetConfig(const meshtastic_Config &c, bool fromOthers)
                                      config.device.double_tap_as_button_press);
 #endif
         config.display = c.payload_variant.display;
+        // A client can set displaymode to a value this build has no UI stack for; on some
+        // builds COLOR would also disable the input drivers. Clamp before it is persisted.
+        nodeDB->clampDisplayModeForBuild();
         break;
 
     case meshtastic_Config_lora_tag: {

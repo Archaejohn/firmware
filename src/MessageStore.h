@@ -1,6 +1,12 @@
 #pragma once
 
-#if HAS_SCREEN || defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS)
+// HAS_MESSAGE_STORE is derived in configuration.h from the UI selection. Include it here
+// rather than relying on every includer having pulled it in first: an undefined macro is
+// silently 0 to the preprocessor, so getting this wrong would compile the store away
+// without a diagnostic.
+#include "configuration.h"
+
+#if HAS_MESSAGE_STORE
 
 // Disable debug logging entirely on release builds of HELTEC_MESH_SOLAR for space constraints
 #if defined(HELTEC_MESH_SOLAR)

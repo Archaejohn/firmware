@@ -644,6 +644,16 @@ class NodeDB
     bool storageCorruptThisLoad = false;
 #endif
 
+    /// Force config.display.displaymode to a value this build can actually drive.
+    ///
+    /// displaymode is persisted, and DisplayMode_COLOR means "hand the screen to the MUI
+    /// (device-ui) stack". Builds that ship a different UI have no MUI, and worse, the COLOR
+    /// value also gates the InputBroker driver construction in InputBroker::Init() - so a
+    /// device carrying COLOR from a previous firmware would boot with no keyboard and no
+    /// rotary encoder, with nothing in the log to explain it. Call after loading config and
+    /// after any admin write that can set it.
+    void clampDisplayModeForBuild();
+
   private:
     mutable concurrency::Lock satelliteMutex;
     bool duplicateWarned = false;

@@ -1,5 +1,5 @@
 #include "configuration.h"
-#if HAS_SCREEN || defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS)
+#if HAS_MESSAGE_STORE
 #include "FSCommon.h"
 #include "MessageStore.h"
 #include "NodeDB.h"

@@ -204,6 +204,10 @@ void setupNicheGraphics();
 #include "nicheGraphics.h"
 #endif
 
+#ifdef MESHTASTIC_INCLUDE_PAGERUI
+#include "graphics/PagerUI/PagerUI.h"
+#endif
+
 #if defined(HW_SPI1_DEVICE) && defined(ARCH_ESP32)
 #if defined(HAS_SDCARD) && defined(SDCARD_USE_SPI1)
 // Reuse FSCommon's SPI_HSPI instance to avoid double-initializing SPI2_HOST in arduino-esp32 3.x.
@@ -866,6 +870,11 @@ void setup()
     // We do this as early as possible because this loads preferences from flash
     // but we need to do this after main cpu init (esp32setup), because we need the random seed set
     nodeDB = new NodeDB;
+#ifdef MESHTASTIC_INCLUDE_PAGERUI
+    // Must precede InputBroker::Init(): it fixes up the config that decides which input
+    // drivers get built and what the rotary encoder emits.
+    PagerUI::preInit();
+#endif
 #ifdef ARCH_ESP32
     // Config is loaded now, and Bluetooth has not been initialized yet. If the
     // saved config will keep Bluetooth inactive, return its reserved memory early.
@@ -1132,6 +1141,12 @@ void setup()
 #ifdef MESHTASTIC_INCLUDE_NICHE_GRAPHICS
     // After modules are setup, so we can observe modules
     setupNicheGraphics();
+#endif
+
+#ifdef MESHTASTIC_INCLUDE_PAGERUI
+    // Same ordering constraint as NicheGraphics: after setupModules(), so the UI can observe
+    // textMessageModule and friends.
+    PagerUI::setup();
 #endif
 
 // Do this after service.init (because that clears error_code)
@@ -1538,7 +1553,7 @@ void loop()
     }
 #endif
 #endif
-#if (HAS_SCREEN || defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS)) && ENABLE_MESSAGE_PERSISTENCE
+#if HAS_MESSAGE_STORE && ENABLE_MESSAGE_PERSISTENCE
     messageStoreAutosaveTick();
 #endif
     long delayMsec = mainController.runOrDelay();
