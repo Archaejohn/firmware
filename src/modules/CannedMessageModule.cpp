@@ -1099,6 +1099,10 @@ void CannedMessageModule::sendText(NodeNum dest, ChannelIndex channel, const cha
     size_t len = strnlen(message, MAX_MESSAGE_SIZE - 1);
     sm.textOffset = MessageStore::storeText(message, len);
     sm.textLength = len;
+    // The packet is already back in the pool by now, but lastRequestId holds its id. Recording
+    // it lets a routing ACK be matched to this exact message instead of to whatever happens to
+    // be newest when the ACK lands.
+    sm.packetId = this->lastRequestId;
 
     // Classify broadcast vs DM
     if (dest == NODENUM_BROADCAST) {

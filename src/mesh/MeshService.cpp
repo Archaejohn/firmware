@@ -305,13 +305,20 @@ void MeshService::handleToRadio(meshtastic_MeshPacket &p)
     // Record the time the packet arrived from the phone.
     stampRxTime(&p);
 
-    IF_SCREEN(if (p.decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP && p.decoded.payload.size > 0 &&
-                  p.to != NODENUM_BROADCAST && p.to != 0) // DM only
-              {
-                  perhapsDecode(&p);
-                  if (const StoredMessage *sm = messageStore.tryAddFromPacket(p))
-                      graphics::MessageRenderer::handleNewMessage(nullptr, *sm, p); // notify UI
-              })
+    // Mirror phone-originated DMs into the local history so the on-device UI shows our own
+    // side of the conversation. Gated on the store, not on BaseUI: a UI that replaces BaseUI
+    // (MESHTASTIC_EXCLUDE_SCREEN) still needs the message, and there is no observable on the
+    // toRadio path to pick it up from. Only the BaseUI notification stays IF_SCREEN.
+#if HAS_MESSAGE_STORE
+    if (p.decoded.portnum == meshtastic_PortNum_TEXT_MESSAGE_APP && p.decoded.payload.size > 0 && p.to != NODENUM_BROADCAST &&
+        p.to != 0) // DM only
+    {
+        perhapsDecode(&p);
+        if (const StoredMessage *sm = messageStore.tryAddFromPacket(p)) {
+            IF_SCREEN(graphics::MessageRenderer::handleNewMessage(nullptr, *sm, p)); // notify BaseUI
+        }
+    }
+#endif
 #if !MESHTASTIC_EXCLUDE_ADMIN
     // Note admin requests on their way out: AdminModule only accepts a response from a remote we
     // actually asked. Runs before encryption, while the payload is still readable.

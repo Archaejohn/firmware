@@ -781,7 +781,7 @@ bool NodeDB::factoryReset(bool eraseBleBonds)
     if (transmitHistory) {
         transmitHistory->clear();
     }
-#if HAS_SCREEN
+#if HAS_MESSAGE_STORE
     messageStore.clearAllMessages();
 #endif
 
@@ -2234,6 +2234,18 @@ void NodeDB::nodeDBSelfCare()
     }
 }
 
+void NodeDB::clampDisplayModeForBuild()
+{
+#ifdef MESHTASTIC_INCLUDE_PAGERUI
+    // PagerUI replaces BaseUI but is not the MUI, so COLOR has no stack behind it here, and
+    // it would additionally suppress the rotary and keyboard drivers in InputBroker::Init().
+    if (config.display.displaymode == meshtastic_Config_DisplayConfig_DisplayMode_COLOR) {
+        LOG_INFO("displaymode COLOR is not supported by this build; using DEFAULT");
+        config.display.displaymode = meshtastic_Config_DisplayConfig_DisplayMode_DEFAULT;
+    }
+#endif
+}
+
 void NodeDB::loadFromDisk()
 {
     // Mark the current device state as completely unusable, so that if we fail reading the entire file from
@@ -2520,6 +2532,8 @@ void NodeDB::loadFromDisk()
         LOG_INFO("Loaded saved config v%d", config.version);
     }
     configLoadComplete = true;
+
+    clampDisplayModeForBuild();
 
     // Coerce LoRa config fields derived from presets while bootstrapping.
     // Some clients/UI components display bandwidth/spread_factor directly from config even in preset mode.
@@ -3505,7 +3519,7 @@ void NodeDB::addFromContact(meshtastic_SharedContact contact)
             LOG_WARN(PROTECTED_CAP_WARN_FMT, "ignore", contact.node_num, MAX_NUM_NODES - 2);
         nodeInfoLiteSetBit(info, NODEINFO_BITFIELD_IS_FAVORITE_MASK, false);
         eraseNodeSatellites(contact.node_num);
-#if HAS_SCREEN || defined(MESHTASTIC_INCLUDE_NICHE_GRAPHICS)
+#if HAS_MESSAGE_STORE
         messageStore.deleteAllMessagesFromNode(contact.node_num);
 #endif
     } else {
